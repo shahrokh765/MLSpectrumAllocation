@@ -1,3 +1,5 @@
+import sys
+sys.path.append('../')
 from MLSpectrumAllocation.Field import *
 from random import *
 import datetime
@@ -26,7 +28,7 @@ if __name__ == "__main__":
                         # calculation for conservative model would also be done
     sensors_path = 'rsc/50/sensors'
 
-    n_samples = 50000
+    n_samples = 500
 
     ss = create_sensors(sensors_path)
 
