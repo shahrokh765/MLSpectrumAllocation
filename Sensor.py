@@ -1,3 +1,5 @@
+import sys
+sys.path.append('../')
 from Commons.Point import Point
 
 class Sensor:
