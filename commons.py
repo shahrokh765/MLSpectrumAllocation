@@ -7,8 +7,9 @@ from typing import List
 import random as rd
 from MLSpectrumAllocation.PU import *
 from MLSpectrumAllocation.SU import SU
+from MLSpectrumAllocation.SPLAT import SPLAT
 
-TRX = namedtuple('TRX', ('loc', 'pow'))
+TRX = namedtuple('TRX', ('loc', 'pow', 'height'))
 PropagationModel = namedtuple('PropagationModel', ('name', 'var'))
 
 
@@ -23,27 +24,47 @@ def calculate_max_power(pus: List[PU], su: SU, propagation_model: PropagationMod
             if propagation_model.name.lower() == "log":
                 loss = 0 if pur_location.distance(su.loc) < 1 else 10 * propagation_model.var[0] * \
                                                                    math.log10(pur_location.distance(su.loc))
-                su_power_at_su = 10 * math.log10(su_power_at_pur) + loss
-                max_pow = min(max_pow, su_power_at_su)
+            elif propagation_model.name.lower() == 'splat':
+                upper_left_corner = propagation_model.var[0]
+                if pur_location.distance(su.loc) < 1:
+                    loss = 0
+                else:
+                    su_lat_lon = tuple(su.loc.get_cartesian)
+                    pur_lat_lon = tuple(pur_location.get_cartesian)
+                    free_loss, itw_loss = SPLAT.path_loss(upper_left_corner, su_lat_lon, su.height, pur_lat_lon, pur.height)
+                    loss = itw_loss if itw_loss != 0.0 else free_loss
+            su_power_at_su = 10 * math.log10(su_power_at_pur) + loss
+            max_pow = min(max_pow, su_power_at_su)
     return max_pow
 
 
 # calculate power at receiver if transmitter send a power
 def power_with_path_loss(tx:TRX, rx:TRX, propagation_model: PropagationModel, noise: bool=False, std: float=0.0,
                          sign: bool=True):  #False for sign means negative otherwise positive
+    tx_power = tx.pow
     if propagation_model.name.lower() == "log":
-        tx_power = tx.pow
         loss = 0 if tx.loc.distance(rx.loc) < 1 else 10 * propagation_model.var[0] * math.log10(tx.loc.distance(rx.loc))
         if noise:
             noise = gauss(0, 10 ** (std/10))
             noise = abs(noise) if sign else -abs(noise)
             tx_noisy = 10 ** (tx_power/10) + noise
             tx_power = 10 * math.log10(tx_noisy) if tx_noisy > 0 else -float('inf')
-        res = 10 ** (rx.pow / 10) + 10 ** ((tx_power - loss) / 10)
-        return float(10 * math.log10(res)) if res > 0 else -float('inf')
+        # res = 10 ** (rx.pow / 10) + 10 ** ((tx_power - loss) / 10)
+        # return float(10 * math.log10(res)) if res > 0 else -float('inf')
+    elif propagation_model.name.lower() == "splat":
+        upper_left_corner = propagation_model.var[0]
+        if tx.loc.distance(rx.loc) < 1:
+            loss = 0
+        else:
+            tx_lat_lon = tuple(tx.loc.get_cartesian)
+            rx_lat_lon = tuple(rx.loc.get_cartesian)
+            free_loss, itw_loss = SPLAT.path_loss(upper_left_corner, tx_lat_lon, tx.height, rx_lat_lon, rx.height)
+            loss = itw_loss if itw_loss != 0.0 else free_loss
+    res = 10 ** (rx.pow / 10) + 10 ** ((tx_power - loss) / 10)
+    return float(10 * math.log10(res)) if res > 0 else -float('inf')
 
 # Create sensors from a file
-def create_sensors(path:str)-> List[Sensor]:
+def create_sensors(path:str, sensor_height)-> List[Sensor]:
     SS = []
     try:
         with open(path, 'r') as f:
@@ -53,7 +74,7 @@ def create_sensors(path:str)-> List[Sensor]:
             for line in lines:
                 line = line.split(' ')
                 x, y, std, cost = float(line[0]), float(line[1]), float(line[2]), float(line[3])
-                SS.append(Sensor(loc= Point(x, y), cost=cost, std=std))
+                SS.append(Sensor(loc= Point(x, y), cost=cost, std=std, height=sensor_height))
     except FileNotFoundError:
         print('Sensor file does not exist')
     return SS
@@ -67,12 +88,12 @@ def conservative_model_power(pus: List[PU], su: SU, min_power, propagation_model
     for pu in pus: # upper bound should be calculated based on purs not pus. Assume there is minimum power at a PU; should calculate min(pur_pow/beta)
         for pur in pu.purs:
             pur_loc = pu.loc.add_polar(pur.loc.r, pur.loc.theta)
-            pow_tmp = power_with_path_loss(tx=TRX(pu.loc, min_power), rx=TRX(pur_loc, -float('inf')),
+            pow_tmp = power_with_path_loss(tx=TRX(pu.loc, min_power, pu.height), rx=TRX(pur_loc, -float('inf'), pur.height),
                                            propagation_model=propagation_model, noise=noise)
             send_power = min(send_power, pow_tmp/pur.beta)
     power_at_su_from_pus = -float('inf')
     for pu in pus:
-        power_at_su_from_pus = power_with_path_loss(tx=TRX(pu.loc, pu.p), rx=TRX(su.loc, power_at_su_from_pus),
+        power_at_su_from_pus = power_with_path_loss(tx=TRX(pu.loc, pu.p, pu.height), rx=TRX(su.loc, power_at_su_from_pus, su.height),
                                                     propagation_model=propagation_model, noise=noise)
         if power_at_su_from_pus > noise_floor:
             return noise_floor  # there is already a signal, su cannot send anything.

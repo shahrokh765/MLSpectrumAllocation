@@ -7,8 +7,9 @@ from random import *
 class PUR:
     rloc = namedtuple('rloc', ('r', 'theta'))  # relative location to pu
 
-    def __init__(self, location, received_power: float=None, threshold: float=-90, beta: float=2):
+    def __init__(self, location, height:float, received_power: float=None, threshold: float=-90, beta: float=2):
         self.loc = self.rloc(r=location[0], theta=location[1])
+        self.height = height
         self.thr = threshold
         self.beta = beta
         self.rp = received_power  # power received from its own pu
@@ -16,9 +17,11 @@ class PUR:
 
 
 class PU:
-    def __init__(self, location:Point, n, pur_threshod, pur_beta, pur_dist, power):
+    def __init__(self, location:Point, height:float, n, pur_threshod, pur_beta, pur_dist, power, pur_height):
         self.loc = location
+        self.height = height
         self.n = n
+        self.pur_height = pur_height
         self.pur_threshold = pur_threshod
         self.pur_beta = pur_beta
         if len(pur_dist) == 2:
@@ -35,7 +38,7 @@ class PU:
         for i in range(self.n):
             self.purs.append(PUR(location=(uniform(self.pur_dist_min, self.pur_dist_max),
                                            i * math.radians(angle)),
-                                 threshold=self.pur_threshold, beta=self.pur_beta))
+                                 threshold=self.pur_threshold, beta=self.pur_beta, height=self.pur_height))
 
 
 if __name__ == "__main__":

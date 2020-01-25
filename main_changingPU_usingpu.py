@@ -4,12 +4,18 @@ import datetime
 import numpy as np
 import math
 from MLSpectrumAllocation.commons import *
+from Commons.Point import *
+from MLSpectrumAllocation.SPLAT import SPLAT
+import tqdm
 
 
 if __name__ == "__main__":
-    alpha = 3 # 2.0, 4.9
-    max_x = 4000  # in meter
-    max_y = 4000  # in meter
+    propagation_model = 'log' # 'splat' or 'log'
+    alpha = 3  # 2.0, 4.9
+    splat_left_upper_ref = (40.800595, 73.107507)
+    tx_height, rx_height = 30, 15
+    max_x = 1000  # in meter
+    max_y = 1000  # in meter
     corners = [Point(0, 0), Point(max_x, 0), Point(0, max_y), Point(max_x, max_y)]
     pus_number = 15  # number of pus all over the field
     pur_number = 10  # number of purs each pu can have
@@ -24,24 +30,32 @@ if __name__ == "__main__":
     noise, std = False, 30  # std in dB, real std=10^(std/10)
     MAX_POWER = True   # make it true if you want to achieve the highest power su can have without interference.
                         # calculation for conservative model would also be done
-    sensors_path = 'rsc/50/sensors'
+    INTERPOLARION, CONSERVATIVE = False, False
+    splat = SPLAT(splat_left_upper_ref, max_x, max_y)
+    if propagation_model == 'splat':
+        splat.generate_sdf_files()
+    sensors_path = 'rsc/300/sensors'
 
-    n_samples = 50000
+    n_samples = 100
 
-    ss = create_sensors(sensors_path)
+    ss = create_sensors(sensors_path, rx_height)
 
-    date =  datetime.datetime.now().strftime('_%Y%m_%d%H_%M')
-    f = open("ML/data/dynamic_pus_using_pus" + str(n_samples) + "_" + str(pus_number)+ "PUs" +
-             ("_noisy_" if noise else "") + ("std" + str(std) if noise else "") +
-             date + ".txt", "w")
+    date = datetime.datetime.now().strftime('_%Y%m_%d%H_%M')
+    f = open("ML/data/dynamic_pus_using_pus" + str(n_samples) + "_" + str(pus_number) + "PUs"
+             "_" + str(max(max_y, max_x)) + "grid_" + propagation_model + "_" +
+             ("_noisy_std" + str(std) if noise else "") + date + ".txt", "w")
     if MAX_POWER:
-        f_max = open("ML/data/dynamic_pus_max_power" + str(n_samples) + "_" + str(pus_number) + "PUs" +
-                     ("_noisy_" if noise else "") + ("std" + str(std) if noise else "") + date + ".txt", "w")
-        f_conserve = open("ML/data/dynamic_pus_conservative_power" + str(n_samples) + "_" + str(pus_number) + "PUs" +
-                     ("_noisy_" if noise else "") + ("std" + str(std) if noise else "") + date + ".txt", "w")
-        conserve_error = 0
-        inter_error = 0
-        inter_ignor, conserve_ignore = 0, 0
+        f_max = open("ML/data/dynamic_pus_max_power" + str(n_samples) + "_" + str(pus_number) + "PUs"
+                     + "_" + str(max(max_y, max_x)) + "grid_" + propagation_model +
+                     ("_noisy_std" + str(std)  if noise else "") + date + ".txt", "w")
+    if CONSERVATIVE:
+        f_conserve = open("ML/data/dynamic_pus_conservative_power" + str(n_samples) + "_" + str(pus_number) + "PUs"
+                          + "_" + str(max(max_y, max_x)) + "grid_" + propagation_model +
+                          ("_noisy_std" + str(std) if noise else "") + date + ".txt", "w")
+        conserve_error, conserve_ignore = 0, 0
+
+    if INTERPOLARION:
+        inter_error, inter_ignor = 0, 0
         # lowest, highest = 0, math.sqrt(max_x**2 + max_y**2) * pow(10, max_power/10) / pur_beta
     # PUs_loc = [Point(x, y) for x in range(500, 3501, 1000) for y in range(500, 3501, 1000)]
     # PUs_loc.pop()
@@ -49,16 +63,19 @@ if __name__ == "__main__":
     pus = []
     for i in range(pus_number):
         pus.append(PU(location=Point(uniform(0, max_x), uniform(0, max_y)), n=pur_number, pur_threshod=pur_threshold,
-                      pur_beta=pur_beta, pur_dist=(min_pur_dist, max_pur_dist), power=uniform(min_power, max_power)))
+                      pur_beta=pur_beta, pur_dist=(min_pur_dist, max_pur_dist), power=uniform(min_power, max_power),
+                      height=tx_height, pur_height=rx_height))
         # pus.append(PU(location=PUs_loc[i], n=pur_number, pur_threshod=pur_threshold,
         #               pur_beta=pur_beta, pur_dist=(min_pur_dist, max_pur_dist), power=uniform(min_power, max_power)))
-    su = SU(Point(uniform(0, max_x), uniform(0, max_y)), uniform(min_power, max_power))
+    su = SU(location=Point(uniform(0, max_x), uniform(0, max_y)), height=tx_height, power=uniform(min_power, max_power))
 
     if ss is not None:
-        f_sensor = open("ML/data/dynamic_pus_sensors_" + str(n_samples) + "_" + str(pus_number) + "PUs_" + str(len(ss)) +
-                        "sensors" + ("_noisy_" if noise else "") + ("std" + str(std) if noise else "") + date + ".txt", "w")
+        f_sensor = open("ML/data/dynamic_pus_sensors_" + str(n_samples) + "_" + str(pus_number) + "PUs" + str(len(ss)) +
+                        "_" + str(len(ss)) + "sensors" + "_" + str(max(max_y, max_x)) + "grid_" + propagation_model + "_" +
+                        ("_noisy_std" + str(std)  if noise else "") + date + ".txt", "w")
 
-    field = Field(pus=pus, su=su, ss=ss, corners=corners, propagation_model='log', alpha=alpha, noise=noise, std=std)
+    field = Field(pus=pus, su=su, ss=ss, corners=corners, propagation_model=propagation_model, alpha=alpha, noise=noise,
+                  std=std, splat_upper_left=splat.upper_left_loc)
 
     if False:   # make it True if you need to find out distribution of location with maximum allowed power
         power_width = max_power - min_power
@@ -100,7 +117,7 @@ if __name__ == "__main__":
         f_heat.close()
 
     num_one = 0
-    for i in range(n_samples):
+    for i in tqdm.tqdm(range(n_samples)):
         su.loc = Point(uniform(0, max_x), uniform(0, max_y))
         su.p = uniform(max_power - 5, max_power + 55)
         res = 0
@@ -121,51 +138,63 @@ if __name__ == "__main__":
 
         if MAX_POWER:  # used when you want to calculate maximum power of su it can send without any interference
             highest_pow = calculate_max_power(field.pus, field.su, field.propagation_model)
-            conserve_pow = conservative_model_power(pus=field.pus, su=field.su, min_power=min_power,
-                                                    propagation_model=field.propagation_model, noise_floor=noise_floor,
-                                                    noise=noise)
-            inter_pow = interpolation_max_power(pus=field.pus, su=field.su, sss=field.ss,
-                                                inter_sm_param=InterSMParam(0, 0, 'sort', 2),
-                                                propagation_model=field.propagation_model, noise=noise)
-            if conserve_pow > highest_pow:
-                print('Warning: Conservative power higher than max!!!, MAX:', str(highest_pow), ', Conservative: ',
-                      str(conserve_pow))
-            if inter_pow > highest_pow:
-                print('Warning: Interpolation power higher than max!!! , MAX:', str(highest_pow), ', Interpolation: ',
-                      str(inter_pow))
+
+            if CONSERVATIVE:
+                conserve_pow = conservative_model_power(pus=field.pus, su=field.su, min_power=min_power,
+                                                        propagation_model=field.propagation_model, noise_floor=noise_floor,
+                                                        noise=noise)
+                if conserve_pow > highest_pow:
+                    print('Warning: Conservative power higher than max!!!, MAX:', str(highest_pow), ', Conservative: ',
+                          str(conserve_pow))
+            if INTERPOLARION:
+                inter_pow = interpolation_max_power(pus=field.pus, su=field.su, sss=field.ss,
+                                                    inter_sm_param=InterSMParam(0, 0, 'sort', 2),
+                                                    propagation_model=field.propagation_model, noise=noise)
+
+                if inter_pow > highest_pow:
+                    print('Warning: Interpolation power higher than max!!! , MAX:', str(highest_pow), ', Interpolation: ',
+                          str(inter_pow))
+
             if highest_pow != -float('inf'):
-                conserve_error += abs(highest_pow - conserve_pow)
-                if inter_pow != -float('inf') and inter_pow != float('inf'):
-                    inter_error += abs(highest_pow - inter_pow)
-                else:
-                    inter_ignor +=1
+                if CONSERVATIVE:
+                    conserve_error += abs(highest_pow - conserve_pow)
+                if INTERPOLARION:
+                    if inter_pow != -float('inf') and inter_pow != float('inf'):
+                        inter_error += abs(highest_pow - inter_pow)
+                    else:
+                        inter_ignor += 1
             else:
-                inter_ignor += 1
-                conserve_ignore += 1
+                if INTERPOLARION:
+                    inter_ignor += 1
+                if CONSERVATIVE:
+                    conserve_ignore += 1
 
             f_max.write(str(su.loc.get_cartesian[0]) + "," + str(su.loc.get_cartesian[1]) + "," +
                         (str(round(highest_pow, 3)) if highest_pow != -float('inf') else '-inf'))
             f_max.write("\n")
-            f_conserve.write(str(su.loc.get_cartesian[0]) + "," + str(su.loc.get_cartesian[1]) + "," +
-                             (str(round(highest_pow, 3)) if highest_pow != -float('inf') else '-inf') + "," +
-                             (str(round(conserve_pow, 3)) if conserve_pow != -float('inf') else '-inf') + "," +
-                             (str(round(inter_pow, 3)) if conserve_pow != -float('inf') else '-inf'))
-            f_conserve.write("\n")
+            if CONSERVATIVE:
+                f_conserve.write(str(su.loc.get_cartesian[0]) + "," + str(su.loc.get_cartesian[1]) + "," +
+                                 (str(round(highest_pow, 3)) if highest_pow != -float('inf') else '-inf') + "," +
+                                 (str(round(conserve_pow, 3)) if conserve_pow != -float('inf') else '-inf') + "," +
+                                 (str(round(inter_pow, 3)) if conserve_pow != -float('inf') else '-inf'))
+                f_conserve.write("\n")
 
         for pu in pus:
             pu.loc, pu.p = Point(uniform(0, max_x), uniform(0, max_y)), uniform(min_power, max_power)
         field.compute_purs_powers()
-        field.compute_sss_received_power()
+        field.compute_sss_received_power() if field.ss else None
 
     f.close()
     if MAX_POWER:
         f_max.close()
+    if CONSERVATIVE:
         f_conserve.close()
-    if ss is not None:
+    if ss:
         f_sensor.close()
     print('Number of samples of class 1(accepted):', num_one)
-    if MAX_POWER:
+    if CONSERVATIVE:
         print('Mean Error for Conservative Model:', conserve_error/(n_samples - conserve_ignore))
+        print('Number of ignore conservative: ', str(conserve_ignore))
+    if INTERPOLARION:
         print('Mean Error for Interpolation Model:', inter_error / (n_samples - inter_ignor))
-    print('Number of ignore conservative: ', str(conserve_ignore))
-    print('Number of ignore interpolation: ', str(inter_ignor))
+        print('Number of ignore interpolation: ', str(inter_ignor))
