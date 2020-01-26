@@ -5,9 +5,10 @@ import zipfile
 import shutil
 import glob
 import subprocess
-from random import randint
+from random import randint, uniform
 import re
 import math
+import time
 from mpu import haversine_distance
 
 from MLSpectrumAllocation.splat_site import Site
@@ -17,6 +18,11 @@ loc = namedtuple('loc', ('lat', 'lon'))
 class SPLAT:
     SDF_DIR = 'rsc/splat/sdf'
     OFFSET = loc(-1/111111, -1/111111)  # offset for one meter that should be added to upper_left_loc
+    TIMEOUT = 0.2
+    APPROX = 5  # SPLAT! will not be used if there is a previous saved path loss in vicinity of APPROX meter
+    SPLAT_COMMAND = 'splat'  # 'splat' or 'splat-hd'
+
+    pl_dict = {}
 
     def __init__(self, upper_left_loc: tuple, field_width: int, field_length: int):
         # field_width => x
@@ -85,7 +91,7 @@ class SPLAT:
                 subprocess.call(["srtm2sdf", hgt_file])
                 # subprocess.call(["srtm2sdf-hd", hgt_file])
         except (ValueError, subprocess.CalledProcessError, OSError) as e:
-            e = sys.exc_info()[0]
+            # e = sys.exc_info()[0]
             raise("Error: converting .hgt file", hgt_file, "was NOT successful!", e)
         os.chdir(owd)
         shutil.rmtree(tmp_dir)  # remove the temporary directory created at the beginning
@@ -104,6 +110,13 @@ class SPLAT:
 
     @staticmethod
     def path_loss(upper_left_ref: loc, tx: tuple, tx_height: float, rx: tuple, rx_height: float):
+        approx_tx = (int(tx[0]//SPLAT.APPROX) * SPLAT.APPROX, int(tx[1]//SPLAT.APPROX) * SPLAT.APPROX)
+        approx_rx = (int(rx[0]//SPLAT.APPROX) * SPLAT.APPROX, int(rx[1]//SPLAT.APPROX) * SPLAT.APPROX)
+        tx_dict_key = '{:04d}{:04d}'.format(approx_tx[0], approx_tx[1])
+        rx_dict_key = '{:04d}{:04d}'.format(approx_rx[0], approx_rx[1])
+        if tx_dict_key in SPLAT.pl_dict:
+            if rx_dict_key in SPLAT.pl_dict[tx_dict_key]:
+                return SPLAT.pl_dict[tx_dict_key][rx_dict_key]
         pwd = os.getcwd()
         os.chdir(SPLAT.SDF_DIR)
         # terr_dir = os.getcwd()
@@ -118,19 +131,61 @@ class SPLAT:
         rx_name = SPLAT.create_qth_files(rx_site)
 
         # running splat command
-        path_loss_command = ['splat-hd', '-t', tx_name, '-r', rx_name]
-        subprocess.call(path_loss_command, stdout=open(os.devnull, 'wb'))
+        path_loss_command = [SPLAT.SPLAT_COMMAND, '-t', tx_name + '.qth', '-r', rx_name + '.qth']
+        # subprocess.call(path_loss_command, stdout=open(os.devnull, 'wb'))
+        p = subprocess.Popen(path_loss_command, stdout=open(os.devnull, 'wb'))
+        count = 1
+        start_time = time.time()
+        while True:
+            if p.poll() is not None:
+                # count = 1
+                break
+            else:
+                if time.time() - start_time > SPLAT.TIMEOUT:
+                    # print('SPLAT! does not produce result for', ' '.join(path_loss_command), 'for ', count, 'times.')
+                    count += 1
+                    p.kill()
+                    # splat! does not respond
+                    # os.remove(tx_name + '.qth')
+                    # os.remove(rx_name + '.qth')
+                    offset = count
+                    # tx_loc = SPLAT.get_loc(upper_left_ref, tx[0] + uniform(-(SPLAT.APPROX/2)**2 - offset, (SPLAT.APPROX/2)**2),
+                    #                        tx[1] + uniform(-(SPLAT.APPROX / 2) ** 2 - offset, (SPLAT.APPROX / 2) ** 2 +
+                    #                                        offset))
+                    tx_loc = SPLAT.get_loc(upper_left_ref,
+                                           tx[0] + uniform(-offset, offset), tx[1] + uniform(-offset, offset))
+                    rx_loc = SPLAT.get_loc(upper_left_ref, rx[0] + uniform(-offset, offset),
+                                           rx[1] + uniform(-offset, offset))
+
+                    tx_site = Site('tx', tx_loc.lat, tx_loc.lon, tx_height, tx_name)
+                    rx_site = Site('rx', rx_loc.lat, rx_loc.lon, rx_height, rx_name)
+                    tx_name = SPLAT.create_qth_files(tx_site)
+                    rx_name = SPLAT.create_qth_files(rx_site)
+
+                    path_loss_command = [SPLAT.SPLAT_COMMAND, '-t', tx_name + '.qth', '-r', rx_name + '.qth']
+
+                    p = subprocess.Popen(path_loss_command, stdout=open(os.devnull, 'wb'))
+                    start_time = time.time()  # reset time
+                else:
+                    time.sleep(SPLAT.TIMEOUT)
 
         output_name = tx_name + '-to-' + rx_name + '.txt'  # the file where the result will be created
         free_pl, itm_pl = SPLAT.process_output(output_name)
 
         # removing created files
-        os.remove(output_name)
-        os.remove(tx_name + '.qth')
-        os.remove(rx_name + '.qth')
-        os.remove(tx_name + '-site_report.txt')
+        try:
+            os.remove(output_name)
+            os.remove(tx_name + '.qth')
+            os.remove(rx_name + '.qth')
+            os.remove(tx_name + '-site_report.txt')
+        except (FileNotFoundError, Exception) as e:
+            pass
 
         os.chdir(pwd)
+        if tx_dict_key not in SPLAT.pl_dict:
+            SPLAT.pl_dict[tx_dict_key] = {rx_dict_key: (float(free_pl), float(itm_pl))}
+        else:
+            SPLAT.pl_dict[tx_dict_key][rx_dict_key] = (float(free_pl), float(itm_pl))
         return float(free_pl), float(itm_pl)
 
     @staticmethod

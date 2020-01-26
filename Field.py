@@ -4,6 +4,7 @@ from MLSpectrumAllocation.SU import *
 from typing import List
 from MLSpectrumAllocation.commons import *
 import multiprocessing
+import sys
 # import random as rd
 
 
@@ -23,8 +24,8 @@ class Field:
         self.noise = noise
         self.std = std
         self.ss = ss
-        self.compute_purs_powers()
-        self.compute_sss_received_power() if ss else None
+        # self.compute_purs_powers()
+        # self.compute_sss_received_power() if ss else None
 
 
     def compute_field_power(self) -> List[List[float]]:  # calculate received power at specific locations all over the
@@ -53,6 +54,21 @@ class Field:
                                               propagation_model=self.propagation_model,
                                               noise=self.noise, std=self.std)  # , self.noise)
                 pur.irp = -float('inf')
+                # multiprocessing to increase speed
+                # try:
+                #     with multiprocessing.Pool() as pool:
+                #         jobs = pool.imap_unordered(power_with_path_loss, [(TRX(npu.loc, npu.p, npu.height),
+                #                                                     TRX(pur_location, -float('inf'), pur.height),
+                #                                                     self.propagation_model, self.noise, self.std)
+                #                                                    for npu in self.pus if npu != pu])
+                #         pool.close()
+                #     irps_res = jobs
+                # except Exception as e:
+                #     e = sys.exc_info()[0]
+                #     print(e)
+                #     raise
+                # total_irp_power = sum([10 ** (irp/10) for irp in irps_res])
+                # pur.irp = 10 * math.log10(total_irp_power) if total_irp_power > 0 else -float('inf')
                 for npu in self.pus:  # power received from other PUs
                     if pu != npu:
                         pur.irp = power_with_path_loss(tx=TRX(npu.loc, npu.p, npu.height), rx=TRX(pur_location, pur.irp, pur.height),
