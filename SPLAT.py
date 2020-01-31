@@ -132,9 +132,14 @@ class SPLAT:
 
         # running splat command
         path_loss_command = [SPLAT.SPLAT_COMMAND, '-t', tx_name + '.qth', '-r', rx_name + '.qth']
-        # subprocess.call(path_loss_command, stdout=open(os.devnull, 'wb'))
-        p = subprocess.Popen(path_loss_command, stdout=open(os.devnull, 'wb'))
+
         count = 1
+        # subprocess.call(path_loss_command, stdout=open(os.devnull, 'wb'))
+        try:
+            p = subprocess.Popen(path_loss_command, stdout=open(os.devnull, 'wb'))
+        except:
+            count +=1
+            pass
         start_time = time.time()
         while True:
             if p.poll() is not None:
@@ -142,6 +147,9 @@ class SPLAT:
                 break
             else:
                 if time.time() - start_time > SPLAT.TIMEOUT:
+                    if count > 50:
+                        print('Error: Too many repetition for a location')
+                        raise
                     # print('SPLAT! does not produce result for', ' '.join(path_loss_command), 'for ', count, 'times.')
                     count += 1
                     p.kill()
@@ -162,15 +170,23 @@ class SPLAT:
                     tx_name = SPLAT.create_qth_files(tx_site)
                     rx_name = SPLAT.create_qth_files(rx_site)
 
-                    path_loss_command = [SPLAT.SPLAT_COMMAND, '-t', tx_name + '.qth', '-r', rx_name + '.qth']
+                    try:
+                        path_loss_command = [SPLAT.SPLAT_COMMAND, '-t', tx_name + '.qth', '-r', rx_name + '.qth']
+                    except:
+                        pass
 
                     p = subprocess.Popen(path_loss_command, stdout=open(os.devnull, 'wb'))
                     start_time = time.time()  # reset time
                 else:
-                    time.sleep(SPLAT.TIMEOUT)
+                    time.sleep(SPLAT.TIMEOUT/5)
 
         output_name = tx_name + '-to-' + rx_name + '.txt'  # the file where the result will be created
-        free_pl, itm_pl = SPLAT.process_output(output_name)
+        try:
+            free_pl, itm_pl = SPLAT.process_output(output_name)
+        except FileNotFoundError:
+            print('Warning: Recalling is happening')
+            os.chdir(pwd)
+            return SPLAT.path_loss(upper_left_ref, tx, tx_height, rx, rx_height)
 
         # removing created files
         try:

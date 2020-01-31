@@ -31,7 +31,8 @@ def calculate_max_power(pus: List[PU], su: SU, propagation_model: PropagationMod
                 else:
                     su_lat_lon = tuple(su.loc.get_cartesian)
                     pur_lat_lon = tuple(pur_location.get_cartesian)
-                    free_loss, itw_loss = SPLAT.path_loss(upper_left_corner, su_lat_lon, su.height, pur_lat_lon, pur.height)
+                    free_loss, itw_loss = SPLAT.path_loss(upper_left_corner, su_lat_lon, su.height, pur_lat_lon,
+                                                          pur.height)
                     loss = itw_loss if itw_loss != 0.0 else free_loss
             su_power_at_su = 10 * math.log10(su_power_at_pur) + loss
             max_pow = min(max_pow, su_power_at_su)
@@ -58,7 +59,8 @@ def power_with_path_loss(tx:TRX, rx:TRX, propagation_model: PropagationModel, no
         else:
             tx_lat_lon = tuple(tx.loc.get_cartesian)
             rx_lat_lon = tuple(rx.loc.get_cartesian)
-            free_loss, itw_loss = SPLAT.path_loss(upper_left_corner, tx_lat_lon, tx.height, rx_lat_lon, rx.height)
+            free_loss, itw_loss = SPLAT.path_loss(upper_left_ref=upper_left_corner, tx=tx_lat_lon, tx_height=tx.height,
+                                                  rx=rx_lat_lon, rx_height=rx.height)
             loss = itw_loss if itw_loss != 0.0 else free_loss
     res = 10 ** (rx.pow / 10) + 10 ** ((tx_power - loss) / 10)
     return float(10 * math.log10(res)) if res > 0 else -float('inf')

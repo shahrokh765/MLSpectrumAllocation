@@ -13,7 +13,7 @@ import glob
 import pickle
 
 
-def main_parallel(chunk_size, chunk_number, file_appdx, return_dict):
+def main_parallel(chunk_size, chunk_number, file_appdx, return_dict, splat_pl_dict):
     num_one = 0
     inter_error, inter_ignore = 0, 0
     conserve_error, conserve_ignore = 0, 0
@@ -37,20 +37,26 @@ def main_parallel(chunk_size, chunk_number, file_appdx, return_dict):
     field = Field(pus=pus, su=su, ss=ss, corners=corners, propagation_model=propagation_model, alpha=alpha,
                   noise=noise, std=std, splat_upper_left=splat.upper_left_loc)
 
+    if field.propagation_model.name.lower() == 'splat':
+        SPLAT.pl_dict = splat_pl_dict
+
     for _ in tqdm.tqdm(range(chunk_size)):
         su.loc = Point(uniform(0, max_x), uniform(0, max_y))
         su.p = uniform(max_power - 5, max_power + 55)
 
         for pu in pus:
             pu.loc, pu.p = Point(uniform(0, max_x), uniform(0, max_y)), uniform(min_power, max_power)
+        try:
+            field.compute_purs_powers()
+            field.compute_sss_received_power() if field.ss else None
 
-        field.compute_purs_powers()
-        field.compute_sss_received_power() if field.ss else None
+            res = 0
+            if field.su_request_accept(randint(0, 1)):
+                res = 1
+                num_one += 1
+        except:
+            continue
 
-        res = 0
-        if field.su_request_accept(randint(0, 1)):
-            res = 1
-            num_one += 1
         for pu in pus:
             tmp_f.write(str(pu.loc.get_cartesian[0]) + "," + str(pu.loc.get_cartesian[1]) + "," + str(round(pu.p, 3)) + ",")
         tmp_f.write(
@@ -58,15 +64,18 @@ def main_parallel(chunk_size, chunk_number, file_appdx, return_dict):
                 res))
         tmp_f.write("\n")
 
-        if ss:
-            for sensor in ss:
+        if field.ss:
+            for sensor in field.ss:
                 tmp_f_sensor.write(str(round(sensor.rp, 3)) + ",")
             tmp_f_sensor.write(str(su.loc.get_cartesian[0]) + "," + str(su.loc.get_cartesian[1]) + "," +
                                str(round(su.p, 3)) + "," + str(res))
             tmp_f_sensor.write("\n")
 
         if MAX_POWER:  # used when you want to calculate maximum power of su it can send without any interference
-            highest_pow = calculate_max_power(field.pus, field.su, field.propagation_model)
+            try:
+                highest_pow = calculate_max_power(field.pus, field.su, field.propagation_model)
+            except:
+                continue
 
             if CONSERVATIVE:
                 conserve_pow = conservative_model_power(pus=field.pus, su=field.su, min_power=min_power,
@@ -115,12 +124,23 @@ def main_parallel(chunk_size, chunk_number, file_appdx, return_dict):
         tmp_f_max.close()
     if CONSERVATIVE:
         tmp_f_conserve.close()
-    if ss:
+    if field.ss:
         tmp_f_sensor.close()
+
+    if propagation_model == 'splat':
+        try:
+            with open('rsc/tmp/pl_map_' + str(file_appdx) + "_" + str(chunk_number)
+                      + '.pickle', 'wb') as f:
+                pickle.dump(SPLAT.pl_dict, file=f, protocol=pickle.HIGHEST_PROTOCOL)
+        except Exception as e:
+            print('Error saving Path Loss Hash map:', e)
+            with open('pl_map_' + str(max(max_x, max_y)) + '_' + str(file_appdx) + "_" + str(chunk_number)
+                      + '.pickle', 'wb') as f:
+                pickle.dump(SPLAT.pl_dict, f)
 
 
 def write_output(file_name, pattern):
-    read_files = glob.glob("rsc/tmp/" + pattern + "*.txt")
+    read_files = sorted(glob.glob("rsc/tmp/" + pattern + "*.txt"))
     with open(file_name, "wb") as outfile:
         for f in read_files:
             with open(f, "rb") as infile:
@@ -128,7 +148,26 @@ def write_output(file_name, pattern):
             os.remove(f)
 
 
+def merge_pl_dicts(file_name, pattern):
+    read_files = glob.glob("rsc/tmp/" + pattern + "*.pickle")
+    pl_map = {}
+    with open(file_name, "wb") as outfile:
+        for f in read_files:
+            with open(f, "rb") as infile:
+                pl_tmp = {}
+                pl_tmp = pickle.load(infile)
+                for tx_key, rxs in pl_tmp.items():
+                    for rx_key, val in rxs.items():
+                        if tx_key not in pl_map:
+                            pl_map[tx_key] = {rx_key:val}
+                        else:
+                            pl_map[tx_key][rx_key] = val
+            os.remove(f)
+        pickle.dump(pl_map, outfile)
+
+
 if __name__ == "__main__":
+    # merge_pl_dicts('rsc/splat/pl_map/pl_map_0.pickle', 'pl_map')
     propagation_model = 'splat'  # 'splat' or 'log'
     alpha = 3  # 2.0, 4.9
     splat_left_upper_ref = (40.800595, 73.107507)
@@ -139,7 +178,7 @@ if __name__ == "__main__":
     pus_number = 10  # number of pus all over the field
     pur_number = 5  # number of purs each pu can have
     pur_threshold = 0
-    pur_beta = 1
+    pur_beta = 0.1
     pur_dist = 3  # distance from each pur to its pu
     min_power = -30  # in dB
     max_power = 0    # in dB
@@ -152,31 +191,52 @@ if __name__ == "__main__":
     number_of_process = 8
     INTERPOLARION, CONSERVATIVE = False, False
 
+    n_samples = 30000
+
+
     start_time = time.time()
     splat = SPLAT(splat_left_upper_ref, max_x, max_y)
     # if propagation_model == 'splat':
     #     splat.generate_sdf_files()
+    if propagation_model == 'splat' and not os.path.exists('rsc/splat'):
+        os.makedirs('rsc/splat')
+
+    if propagation_model == 'splat' and not os.path.exists('rsc/splat/pl_map'):
+        os.makedirs('rsc/splat/pl_map')
+
+    pl_dict = {}
+    if propagation_model == 'splat' and os.path.exists('rsc/splat/pl_map/pl_map.pickle'):
+        pl_map_file = 'rsc/splat/pl_map/pl_map.pickle'
+        try:
+            with open(pl_map_file, 'rb') as pl_f:
+                # print(os.getcwd())
+                pl_dict = pickle.load(pl_f)
+        except Exception as e:
+            print('Warning: You path loss map file is corrupted!')
+            # splat.pl_dict = manager.dict()
     sensors_path = 'rsc/100/sensors'
 
     if not os.path.exists('rsc/tmp'):
         os.makedirs('rsc/tmp')
-
-    n_samples = 1000
 
     ss = create_sensors(sensors_path, rx_height)
 
     date = datetime.datetime.now().strftime('_%Y%m_%d%H_%M')
 
     jobs = []
-    manager = Manager()
-    result_dict = manager.dict()
-
     chunks_size = [n_samples // number_of_process] * number_of_process
     chunks_size[-1] += n_samples % number_of_process
 
+    manager = Manager()
+    # pl_dict = {} # manager.dict()  # splat_pl_dict
+    # pl_dict['00000000'] = {'00000000': (0, 0)}
+    result_dict = manager.dict()
+
+
+
     file_appdx = randint(0, 1000)
     for i in range(number_of_process):
-        p = Process(target=main_parallel, args=(chunks_size[i], i, file_appdx, result_dict))
+        p = Process(target=main_parallel, args=(chunks_size[i], i, file_appdx, result_dict, pl_dict))
         jobs.append(p)
         p.start()
         # p.join()
@@ -253,7 +313,4 @@ if __name__ == "__main__":
             f_heat.write('\n')
         f_heat.close()
 
-    print("--- %s seconds ---" % (time.time() - start_time))
-    pl_map_file = open('pl_map_' + str(max(max_x, max_y)) + '.dat', 'w')
-    pickle.dump([SPLAT.pl_dict], file=pl_map_file)
-    pl_map_file.close()
+    print("--- %s seconds ---" % (str(datetime.timedelta(seconds=int(time.time() - start_time)))))

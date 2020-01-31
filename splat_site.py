@@ -3,8 +3,8 @@ A splat site that have location(lat, lon) amd height
 '''
 from random import randint
 class Site:
-    def __init__(self, type, lat, lon, height):
-        self.name = '{}-N{}W{}-{}'.format(type, abs(int(lat*1000)), abs(int(lon*1000)), randint(0, 10**5))
+    def __init__(self, type, lat, lon, height, name=None):
+        self.name = '{}-N{}W{}-{}'.format(type, abs(int(lat*1000)), abs(int(lon*1000)), randint(0, 10**5)) if not name else name
         # self.type = type # 'tx' or 'rx'
         self.lat = lat  # latitude  is the Y axis
         self.lon = lon  # longitude is the X axis
