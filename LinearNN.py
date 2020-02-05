@@ -14,12 +14,13 @@ from sklearn.pipeline import Pipeline
 import datetime
 import math
 import pickle
+import tqdm
 
 import numpy as np
 from matplotlib import pyplot as plt
 
-dataframe = pd.read_csv('ML/data/dynamic_pus_using_pus50000_15PUs_201912_2219_10_1k.txt', delimiter=',', header=None)
-dataframe_max = pd.read_csv('ML/data/dynamic_pus_max_power50000_15PUs_201912_2219_10_1k.txt', delimiter=',', header=None)
+dataframe = pd.read_csv('ML/data/dynamic_pus_using_pus_50000_10PUs_200grid_splat_202001_3100_42.txt', delimiter=',', header=None)
+dataframe_max = pd.read_csv('ML/data/dynamic_pus_max_power50000_10PUs_200grid_splat_202001_3100_42.txt', delimiter=',', header=None)
 dataframe.reset_index(drop=True, inplace=True)
 dataframe_max.reset_index(drop=True, inplace=True)
 dataframe_n = pd.concat([dataframe.iloc[:, 0:len(dataframe.columns)-2], dataframe_max.iloc[:, dataframe_max.columns.values[-1]]], axis=1,
@@ -30,8 +31,8 @@ data = dataframe_n.values
 noise_floor = -90
 
 # number_samples = [5] + list(range(10, 101, 10)) + [120, 150, 200, 250, 300, 400, 500, 700] + list(range(1000, 4001, 1000))
-number_samples = [120, 150, 200, 250, 300, 400, 500, 700] + list(range(1000, 4001, 1000))
-number_samples = [8000, 12000]
+number_samples = [120, 150, 200, 250, 300, 400, 500, 700] + list(range(1000, 4001, 1000)) + [6000, 8000, 10000, 12000]
+# number_samples = [8000, 12000]
 validation_size = 0.33   # of training samples
 fp_penalty_coef = 1
 fn_penalty_coef = 1
@@ -109,7 +110,7 @@ for samples in number_samples:
     y_test_l, yp_test_l = y_test.tolist(), yp_test.tolist()
     sum_, max_, count = 0, -float('inf'), 0
     fp_sum_, fp_cnt = 0, 0
-    for i in range(len(y_test_l)):
+    for i in tqdm.tqdm(range(len(y_test_l))):
         count += 1
         diff_temp = abs(y_test_l[i] - yp_test_l[i][0])
         sum_ += diff_temp
