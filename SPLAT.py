@@ -18,9 +18,13 @@ loc = namedtuple('loc', ('lat', 'lon'))
 class SPLAT:
     SDF_DIR = 'rsc/splat/sdf'
     OFFSET = loc(-1/111111, -1/111111)  # offset for one meter that should be added to upper_left_loc
-    TIMEOUT = 0.2
-    APPROX = 5  # SPLAT! will not be used if there is a previous saved path loss in vicinity of APPROX meter
+    TIMEOUT = 0.4
+    APPROX = 10  # SPLAT! will not be used if there is a previous saved path loss in vicinity of APPROX meter
     SPLAT_COMMAND = 'splat'  # 'splat' or 'splat-hd'
+    FETCH_TIME = 0
+    FETCH_NUM = 0
+    EXEC_TIME = 0
+    EXEC_NUM = 0
 
     pl_dict = {}
 
@@ -41,7 +45,6 @@ class SPLAT:
               "1       ;   Polarization (0 = Horizontal, 1 = Vertical)      \n" + \
               "0.50    ;   Fraction of situations (50% of locations)        \n" + \
               "0.90    ;   Fraction of time (90% of the time)\n"
-
         with open(self.SDF_DIR + '/splat.lrp', 'w') as fq:
             fq.write(str(LRP))
 
@@ -110,15 +113,21 @@ class SPLAT:
 
     @staticmethod
     def path_loss(upper_left_ref: loc, tx: tuple, tx_height: float, rx: tuple, rx_height: float):
+        tmp_fetch_time = time.time()
         approx_tx = (int(tx[0]//SPLAT.APPROX) * SPLAT.APPROX, int(tx[1]//SPLAT.APPROX) * SPLAT.APPROX)
         approx_rx = (int(rx[0]//SPLAT.APPROX) * SPLAT.APPROX, int(rx[1]//SPLAT.APPROX) * SPLAT.APPROX)
         tx_dict_key = '{:04d}{:04d}'.format(approx_tx[0], approx_tx[1])
         rx_dict_key = '{:04d}{:04d}'.format(approx_rx[0], approx_rx[1])
         if tx_dict_key in SPLAT.pl_dict:
             if rx_dict_key in SPLAT.pl_dict[tx_dict_key]:
-                return SPLAT.pl_dict[tx_dict_key][rx_dict_key]
+                out = SPLAT.pl_dict[tx_dict_key][rx_dict_key]
+                SPLAT.FETCH_TIME += time.time() - tmp_fetch_time
+                SPLAT.FETCH_NUM += 1
+                return out
+        tmp_exec_time = time.time()
         pwd = os.getcwd()
-        os.chdir(SPLAT.SDF_DIR)
+        file_dir = os.path.dirname(__file__)
+        os.chdir(file_dir + "/" + SPLAT.SDF_DIR)
         # terr_dir = os.getcwd()
         # os.chdir('out')
 
@@ -138,7 +147,7 @@ class SPLAT:
         try:
             p = subprocess.Popen(path_loss_command, stdout=open(os.devnull, 'wb'))
         except:
-            count +=1
+            count += 1
             pass
         start_time = time.time()
         while True:
@@ -202,6 +211,8 @@ class SPLAT:
             SPLAT.pl_dict[tx_dict_key] = {rx_dict_key: (float(free_pl), float(itm_pl))}
         else:
             SPLAT.pl_dict[tx_dict_key][rx_dict_key] = (float(free_pl), float(itm_pl))
+        SPLAT.EXEC_TIME += time.time() - tmp_exec_time
+        SPLAT.EXEC_NUM += 1
         return float(free_pl), float(itm_pl)
 
     @staticmethod
