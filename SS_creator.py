@@ -7,7 +7,7 @@ if __name__ == '__main__':
     grid_length = 1000
     std = 1
     cost = 0.388882393442197
-    number_of_sensors = 1600
+    number_of_sensors = 3600
     sensor_file_path = '/'.join(['rsc', 'sensors', str(grid_length), str(number_of_sensors)])
     print(sensor_file_path)
     if not os.path.exists(sensor_file_path):

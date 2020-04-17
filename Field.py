@@ -9,10 +9,10 @@ import sys
 
 
 class Field:
-    def __init__(self, pus: List[PU], su: SU, ss:List[Sensor], corners: List[Point], propagation_model: str, alpha: float, noise: bool=False,
+    def __init__(self, pus: List[PU], sus: List[SU], ss:List[Sensor], corners: List[Point], propagation_model: str, alpha: float, noise: bool=False,
                  std: float = -float('inf'), splat_upper_left=None, cell_size: int = 1):
         self.pus = pus
-        self.su = su
+        self.sus = sus
         self.corners = corners
         # self.propagation_model = propagation_model
         # self.alpha = alpha
@@ -47,7 +47,8 @@ class Field:
         return received_power
 
     def compute_purs_powers(self):  # calculate received powers at PURs
-        for pu in self.pus:
+        tmp_pus = [tmp_pu for tmp_pu in self.pus if tmp_pu.ON]
+        for pu in tmp_pus:
             for pur in pu.purs:
                 pur_location = pu.loc.add_polar(pur.loc.r, pur.loc.theta)
                 pur.rp = -float('inf')  # calculate power received at PURs due to their pu
@@ -55,43 +56,53 @@ class Field:
                                               propagation_model=self.propagation_model,
                                               noise=self.noise, std=self.std, cell_size=self.cell_size)  # , self.noise)
                 pur.irp = -float('inf')
-                # multiprocessing to increase speed
-                # try:
-                #     with multiprocessing.Pool() as pool:
-                #         jobs = pool.imap_unordered(power_with_path_loss, [(TRX(npu.loc, npu.p, npu.height),
-                #                                                     TRX(pur_location, -float('inf'), pur.height),
-                #                                                     self.propagation_model, self.noise, self.std)
-                #                                                    for npu in self.pus if npu != pu])
-                #         pool.close()
-                #     irps_res = jobs
-                # except Exception as e:
-                #     e = sys.exc_info()[0]
-                #     print(e)
-                #     raise
-                # total_irp_power = sum([10 ** (irp/10) for irp in irps_res])
-                # pur.irp = 10 * math.log10(total_irp_power) if total_irp_power > 0 else -float('inf')
-                for npu in self.pus:  # power received from other PUs
+                for npu in tmp_pus:  # power received from other PUs
                     if pu != npu:
-                        pur.irp = power_with_path_loss(tx=TRX(npu.loc, npu.p, npu.height), rx=TRX(pur_location, pur.irp, pur.height),
+                        pur.irp = power_with_path_loss(tx=TRX(npu.loc, npu.p, npu.height),
+                                                       rx=TRX(pur_location, pur.irp, pur.height),
                                                        propagation_model=self.propagation_model,
-                                                       noise=self.noise, std=self.std, cell_size=self.cell_size)  # , self.noise)
+                                                       noise=self.noise, std=self.std, cell_size=self.cell_size)
+        # copmute max power power for SUs except the last one, O(#su * #pus * #sus)
+        for i in range(len(self.sus) - 1):
+            # get max_power for su
+            su = self.sus[i]
+            su.p = calculate_max_power(pus=tmp_pus, su=su,
+                                       propagation_model=self.propagation_model, cell_size=self.cell_size,
+                                       noise=self.noise, std=self.std)
+            # update irp for purs
+            for pu in tmp_pus:
+                for pur in pu.purs:
+                    pur_location = pu.loc.add_polar(pur.loc.r, pur.loc.theta)
+                    pur.irp = power_with_path_loss(tx=TRX(su.loc, su.p, su.height),
+                                                   rx=TRX(pur_location, pur.irp, pur.height),
+                                                   propagation_model=self.propagation_model,
+                                                   noise=self.noise, std=self.std, cell_size=self.cell_size)
+
+
 
     def compute_sss_received_power(self):  # compute received power at sensors from PUs
         for sensor in self.ss:
             sensor.rp = - float('inf')
-            for pu in self.pus:
+            for pu in [tmp_pu for tmp_pu in self.pus if tmp_pu.ON]:  # calculate power of PUs
                 sensor.rp = power_with_path_loss(tx=TRX(pu.loc, pu.p, pu.height), rx=TRX(sensor.loc, sensor.rp, sensor.height),
+                                                 propagation_model=self.propagation_model, noise=self.noise,
+                                                 std=self.std, cell_size=self.cell_size)
+
+            for i in range(len(self.sus) - 1): # calculate power of sus(except the last one)
+                su = self.sus[i]
+                sensor.rp = power_with_path_loss(tx=TRX(su.loc, su.p, su.height), rx=TRX(sensor.loc, sensor.rp, sensor.height),
                                                  propagation_model=self.propagation_model, noise=self.noise,
                                                  std=self.std, cell_size=self.cell_size)
 
     def su_request_accept(self, sign: bool=True):  # sign here is temporary and just for create an unreal situation in which learning would fail
         option = 0  # 0 means using BETA, 1 means using threshold
-        for pu in self.pus:
+        su = self.sus[-1]
+        for pu in [tmp_pu for tmp_pu in self.pus if tmp_pu.ON]:
             for pur in pu.purs:
                 pur_location = pu.loc.add_polar(pur.loc.r, pur.loc.theta)
                 if option:
                     if pur.irp < pur.thr:
-                        if power_with_path_loss(tx=TRX(self.su.loc, self.su.p, self.su.height),
+                        if power_with_path_loss(tx=TRX(su.loc, su.p, su.height),
                                                 rx=TRX(pur_location, pur.irp, pur.height),
                                                 propagation_model=self.propagation_model,
                                                 noise=self.noise, std=self.std, cell_size=self.cell_size) > pur.thr:
@@ -100,7 +111,7 @@ class Field:
                     try:
                         if 10 ** (pur.irp/10) == 0 or 10 ** (pur.rp/10) / 10 ** (pur.irp/10) > pur.beta:
                             if (10 ** (pur.rp/10) /
-                                10 ** (power_with_path_loss(tx=TRX(self.su.loc, self.su.p, self.su.height),
+                                10 ** (power_with_path_loss(tx=TRX(su.loc, su.p, su.height),
                                                             rx=TRX(pur_location, pur.irp, pur.height),
                                                             propagation_model=self.propagation_model,
                                                             noise=self.noise, std=self.std, cell_size=self.cell_size)/10))\

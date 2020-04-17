@@ -112,7 +112,9 @@ class SPLAT:
         return qthfile
 
     @staticmethod
-    def path_loss(upper_left_ref: loc, tx: tuple, tx_height: float, rx: tuple, rx_height: float):
+    def path_loss(upper_left_ref: loc, tx: tuple, tx_height: float, rx: tuple, rx_height: float, iteration: int = 0):
+        if iteration == 10:
+            raise Exception("Sample skipped")
         tmp_fetch_time = time.time()
         approx_tx = (int(tx[0]//SPLAT.APPROX) * SPLAT.APPROX, int(tx[1]//SPLAT.APPROX) * SPLAT.APPROX)
         approx_rx = (int(rx[0]//SPLAT.APPROX) * SPLAT.APPROX, int(rx[1]//SPLAT.APPROX) * SPLAT.APPROX)
@@ -195,7 +197,7 @@ class SPLAT:
         except FileNotFoundError:
             print('Warning: Recalling is happening')
             os.chdir(pwd)
-            return SPLAT.path_loss(upper_left_ref, tx, tx_height, rx, rx_height)
+            return SPLAT.path_loss(upper_left_ref, tx, tx_height, rx, rx_height, iteration + 1)
 
         # removing created files
         try:

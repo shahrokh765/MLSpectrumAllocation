@@ -18,6 +18,7 @@ class PUR:
 
 class PU:
     def __init__(self, location:Point, height:float, n, pur_threshod, pur_beta, pur_dist, power, pur_height):
+        self.ON = False # indicates if this PU exists or not(usable for different samples)
         self.loc = location
         self.height = height
         self.n = n

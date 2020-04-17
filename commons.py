@@ -13,17 +13,21 @@ TRX = namedtuple('TRX', ('loc', 'pow', 'height'))
 PropagationModel = namedtuple('PropagationModel', ('name', 'var'))
 
 
-def calculate_max_power(pus: List[PU], su: SU, propagation_model: PropagationModel,  cell_size: int = 1) -> float:
+def calculate_max_power(pus: List[PU], su: SU, propagation_model: PropagationModel,  cell_size: int = 1,
+                        noise: bool = False, std: float = 0.0) -> float:
     max_pow = float('inf')
     for pu in pus:
         for pur in pu.purs:
             pur_location = pu.loc.add_polar(pur.loc.r, pur.loc.theta)
             su_power_at_pur = 10 ** (pur.rp/10) / pur.beta - 10 ** (pur.irp/10)
+            # TODO implement alpha
             if su_power_at_pur <= 0:
                 return -float('inf')
             if propagation_model.name.lower() == "log":
                 loss = 0 if cell_size * pur_location.distance(su.loc) < 1 else 10 * propagation_model.var[0] * \
                                                                    math.log10(cell_size * pur_location.distance(su.loc))
+                if noise:
+                    loss += gauss(0, std)
             elif propagation_model.name.lower() == 'splat':
                 upper_left_corner = propagation_model.var[0]
                 if cell_size * pur_location.distance(su.loc) < 1:
@@ -43,6 +47,8 @@ def calculate_max_power(pus: List[PU], su: SU, propagation_model: PropagationMod
 def power_with_path_loss(tx: TRX, rx: TRX, propagation_model: PropagationModel, noise: bool = False, std: float = 0.0,
                          sign: bool = True, cell_size: int = 1):  #False for sign means negative otherwise positive
     tx_power = tx.pow
+    if tx_power == -float('inf'):
+        return rx.pow
     if propagation_model.name.lower() == "log":
         loss = 0 if cell_size * tx.loc.distance(rx.loc) < 1 else 10 * propagation_model.var[0] * \
                                                                  math.log10(cell_size * tx.loc.distance(rx.loc))
@@ -92,6 +98,8 @@ def conservative_model_power(pus: List[PU], su: SU, min_power, propagation_model
                              noise=False, cell_size: int = 1):
     send_power = float('inf')
     for pu in pus: # upper bound should be calculated based on purs not pus. Assume there is minimum power at a PU; should calculate min(pur_pow/beta)
+        if not pu.ON:
+            continue
         for pur in pu.purs:
             pur_loc = pu.loc.add_polar(pur.loc.r, pur.loc.theta)
             pow_tmp = power_with_path_loss(tx=TRX(pu.loc, min_power, pu.height), rx=TRX(pur_loc, -float('inf'), pur.height),
@@ -99,6 +107,8 @@ def conservative_model_power(pus: List[PU], su: SU, min_power, propagation_model
             send_power = min(send_power, pow_tmp/pur.beta)
     power_at_su_from_pus = -float('inf')
     for pu in pus:
+        if not pu.ON:
+            continue
         power_at_su_from_pus = power_with_path_loss(tx=TRX(pu.loc, pu.p, pu.height), rx=TRX(su.loc, power_at_su_from_pus, su.height),
                                                     propagation_model=propagation_model, noise=noise, cell_size=cell_size)
         if power_at_su_from_pus > noise_floor:
