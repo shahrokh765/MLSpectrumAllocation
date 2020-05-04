@@ -1,8 +1,9 @@
 import abc
 from Commons.elements import Element
 from Commons.Point import Point
-from math import log10
+from math import log10, sin, pi
 from random import gauss
+import matplotlib.pyplot as plt
 
 
 class PropagationModel(abc.ABC):
@@ -33,6 +34,8 @@ class LogDistancePM(PropagationModel):
         self.__std = std            # standard deviation of the noise with mean of zero
         self.__pl_ref = pl_ref      # Path loss reference (PL_0) in distance distance reference dist_ref
         self.__dist_ref = dist_ref  # Distance reference where the path loss is pl_ref
+        self.__dist_period = 10.0
+        self.__shadow_amp = std * 5
 
     @property
     def alpha(self) -> float:
@@ -84,7 +87,11 @@ class LogDistancePM(PropagationModel):
         distance = tx.location.distance(rx.location) / self.dist_ref
         loss = self.pl_ref
         loss += 0 if distance < 1 else 10 * self.alpha * log10(distance)
-        if self.is_noisy:
+        loss += 0 if distance < 1 else self.__shadow_amp * sin(
+            2 * pi * 10 * log10(distance) / log10(self.__dist_period))  # add shadowing - log based
+        # loss += 0 if distance == 0 else self.__shadow_amp * sin(
+        #     2 * pi * distance / self.__dist_period)  # add shadowing
+        if self.is_noisy:  # add multipath
             loss += gauss(0, self.std)
         return loss
 
@@ -96,9 +103,15 @@ class LogDistancePM(PropagationModel):
 
 
 if __name__ == "__main__":
-    log_pm = LogDistancePM(2.0, True, 1.0)
+    log_pm = LogDistancePM(2.0, True, 1)
     print(log_pm)
     print(log_pm.path_loss(Element(Point((0, 0)), 15), Element(Point((10, 10)), 15)))
-    log_pm.is_noisy = False
+    # log_pm.is_noisy = False
     print(log_pm)
     print(hasattr(log_pm, 'alpha'))
+    x = [i/10 for i in range(10, 1000)]
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    ax.plot(x, [log_pm.path_loss(Element(Point((1, 1)), 15), Element(Point((1, 1)) * i, 15)) for i in x])
+    ax.set_xscale('log')
+    plt.show()
