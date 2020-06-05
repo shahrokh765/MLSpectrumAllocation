@@ -9,7 +9,7 @@ class PUR:
     def __init__(self, pu_id: str, pur_id: int, rx: RX, threshold: float=None, beta: float=None):
         if threshold is None and beta is None:
             raise ValueError("Both threshold and beta cannot be None.")
-        elif threshold is not None and beta is None:
+        elif threshold is not None and beta is not None:
             raise ValueError("One of threshold and beta should be given.")
         elif threshold is None and beta == 0.0:
             raise ValueError("Beta cannot be zero.")

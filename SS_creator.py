@@ -64,8 +64,8 @@ if __name__ == '__main__':
     # TODO this is just for Square field
     # sensor_file_path = 'rsc/sensors/1000/1200/sensors'
     STYLE = "UNIFORM"  # {"RANDOM", "UNIFORM"}
-    grid_length = 1000
+    grid_length = 100
     std = 1
     cost = 0.388882393442197
-    number_of_sensors = 400
+    number_of_sensors = 225
     generate_sensors(STYLE, grid_length, std, cost, number_of_sensors)

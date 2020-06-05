@@ -6,7 +6,7 @@ class Site:
     A splat site that have location(lat, lon) amd height
     """
     def __init__(self, tp, lat: float, lon: float, height: float, name: str=None):
-        self.__name = '{}-N{}W{}-{}'.format(type, abs(int(lat*1000)), abs(int(lon*1000)), randint(0, 10**5)) \
+        self.__name = '{}-N{}W{}-{}'.format(tp, abs(int(lat*1000)), abs(int(lon*1000)), randint(0, 10**5)) \
             if not name else name
         # self.type = tp # 'tx' or 'rx'
         self.__lat = lat  # latitude  is the Y axis

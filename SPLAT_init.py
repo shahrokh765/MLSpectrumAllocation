@@ -77,5 +77,5 @@ def generate_sdf_files(upper_left_loc: GeographicPoint, field_length):  # downlo
 
 
 if __name__ == "__main__":
-    generate_sdf_files(GeographicPoint(40.800595, 73.107507), 1000)
+    generate_sdf_files(GeographicPoint(40.800595, 73.107507), 10000)
     create_lrp_file()

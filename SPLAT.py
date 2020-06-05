@@ -70,7 +70,7 @@ class SPLAT(PropagationModel):
         return qthfile
 
     def path_loss(self, tx: Element, rx: Element, iteration: int=0):
-        if iteration == 10:
+        if iteration == 20:
             raise Exception("Sample skipped")
         tmp_fetch_time = time.time()
         approx_tx = (int(tx.location.cartesian.x//SPLAT.APPROX) * SPLAT.APPROX,
@@ -79,7 +79,7 @@ class SPLAT(PropagationModel):
                      int(rx.location.cartesian.y//SPLAT.APPROX) * SPLAT.APPROX)
         tx_dict_key = '{:04d}{:04d}'.format(approx_tx[0], approx_tx[1])
         rx_dict_key = '{:04d}{:04d}'.format(approx_rx[0], approx_rx[1])
-        if tx_dict_key in SPLAT.pl_dict:
+        if tx_dict_key in self.pl_dict:
             if rx_dict_key in self.pl_dict[tx_dict_key]:
                 # free, itm = self.pl_dict[tx_dict_key][rx_dict_key]  # old format which the map has both values
                 pl_value = self.pl_dict[tx_dict_key][rx_dict_key]
@@ -175,7 +175,7 @@ class SPLAT(PropagationModel):
 
         os.chdir(pwd)
         pl_value = float(itm_pl) if float(itm_pl) != 0.0 else float(free_pl)
-        if tx_dict_key not in SPLAT.pl_dict:
+        if tx_dict_key not in self.pl_dict:
             # self.__pl_dict[tx_dict_key] = {rx_dict_key: (float(free_pl), float(itm_pl))}  # old version
             self.__pl_dict[tx_dict_key] = {rx_dict_key: pl_value}
         else:
