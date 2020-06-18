@@ -29,10 +29,14 @@ idx = dataframe_n[dataframe_n[dataframe_n.columns[-1]] == -float('inf')].index
 dataframe_n.drop(idx, inplace=True)
 data = dataframe_n.values
 
-number_samples = [5] + list(range(10, 101, 10)) + [120, 150, 200, 250, 300, 400, 500, 700] + list(range(1000, 4001, 1000))
+# number_samples = [5] + list(range(10, 101, 10)) + [120, 150, 200, 250, 300, 400, 500, 700] + list(range(1000, 4001, 1000))
+number_samples = [256, 512, 1028, 2048, 4096, 8192]
 # number_samples = [3000]
 validation_size = 0.33   # of training samples
-fp_penalty_coef = 100
+max_pus_num, max_sus_num = 20, 1
+IS_SENSORS, sensors_num = False, 225
+DUMMY_VALUE = -90.0
+fp_penalty_coef = 1
 fn_penalty_coef = 1
 average_diff_power = []
 fp_mean, fp_count = [], []
@@ -46,12 +50,66 @@ def custom_loss(fp_penalty_coef, fn_penalty_coef):
                K.mean(fn_penalty_coef * K.square(y_pred - y_true)[y_pred <= y_true])
     return loss
 
+
+def split(data : np.ndarray, train_samples: int, max_pus_number: int, max_sus_number: int, IS_SENSORS: bool,
+          num_sensors: int, DUMMY_VALUE: float):
+    num_inputs = (max_sus_number - 1) * 3 + 2 + (max_pus_number * 3
+                                                 if not IS_SENSORS else num_sensors)
+    # val_samples = round(train_samples / 3)
+    test_samples = data.shape[0] - train_samples
+    # init arrays
+    X_train = np.ones((train_samples, num_inputs), dtype=float) * DUMMY_VALUE
+    # X_val = np.ones((val_samples, num_inputs), dtype=float) * DUMMY_VALUE
+    X_test = np.ones((test_samples, num_inputs), dtype=float) * DUMMY_VALUE
+    # read values
+    if not IS_SENSORS:
+        # fill train
+        for train_sample in range(train_samples):
+            num_pus = int(data[train_sample, 0])
+            num_sus = int(data[train_sample, 1 + num_pus * 3])
+            X_train[train_sample, :num_pus * 3] = data[train_sample, 1:1 + num_pus * 3]  # pus
+            # sus except power of last su
+            X_train[train_sample, max_pus_number * 3:
+                                  (max_pus_number + num_sus) * 3 - 1] = \
+                data[train_sample, 2 + num_pus * 3: 1 + (num_pus + num_sus) * 3]
+        # fill test
+        for test_sample in range(train_samples, train_samples + test_samples):
+            num_pus = int(data[test_sample, 0])
+            num_sus = int(data[test_sample, 1 + num_pus * 3])
+            X_test[test_sample - train_samples, :num_pus * 3] = data[test_sample, 1:1 + num_pus * 3]
+            X_test[test_sample - train_samples, max_pus_number * 3:
+                                                (max_pus_number + num_sus) * 3 - 1] = \
+                data[test_sample, 2 + num_pus * 3:1 + (num_pus + num_sus) * 3]
+    else:
+        # read sensors
+        X_train[:, :num_sensors] = data[:train_samples, :num_sensors]
+        X_test[:, :num_sensors] = data[train_samples:, :num_sensors]
+        # read sus
+        for train_sample in range(train_samples):
+            num_sus = int(data[train_sample, num_sensors])
+            X_train[train_sample, num_sensors + 1: num_sensors + num_sus * 3] = data[
+                train_sample, num_sensors + 1:num_sensors + num_sus * 3]
+
+        for test_sample in range(train_samples, train_samples + test_samples):
+            num_sus = int(data[test_sample, num_sensors])
+            X_test[test_sample - train_samples, num_sensors + 1: num_sensors + num_sus * 3] =\
+                data[test_sample, num_sensors + 1:num_sensors + num_sus * 3]
+
+    y_train = data[0: train_samples, -1]
+    # y_val = data[train_samples: train_samples + val_samples, -1]
+    y_test = data[train_samples:, -1]
+    return X_train, X_test, y_train, y_test
+
+
 for samples in number_samples:
     sample = math.ceil(samples * (1 + validation_size))
-    X_train = data[0:sample, 0: num_inputs]
-    y_train = data[0:sample, -1]
-    X_test = data[sample:, 0: num_inputs]
-    y_test = data[sample:, -1]
+    # X_train = data[0:sample, 0: num_inputs]
+    # y_train = data[0:sample, -1]
+    # X_test = data[sample:, 0: num_inputs]
+    # y_test = data[sample:, -1]
+    X_train, X_test, y_train, y_test = split(data, sample, max_pus_num, max_sus_num,
+                                             IS_SENSORS, sensors_num,
+                                             DUMMY_VALUE)
 
     y_train = np.reshape(y_train, (-1,1))
     scaler_x = StandardScaler()
