@@ -16,19 +16,6 @@ import pickle
 import numpy as np
 from matplotlib import pyplot as plt
 
-var_f = open("variables_" + datetime.datetime.now().strftime('_%Y%m_%d%H_%M')+ ".txt", "wb")
-
-
-dataframe = pd.read_csv('ML\data\dynamic_pus_using_pus50000_15PUs_201910_2616_25.txt', delimiter=',', header=None)
-dataframe_max = pd.read_csv('ML\data\dynamic_pus_max_power50000_15PUs_201910_2616_25.txt', delimiter=',', header=None)
-dataframe.reset_index(drop=True, inplace=True)
-dataframe_max.reset_index(drop=True, inplace=True)
-dataframe_n = pd.concat([dataframe.iloc[:, 0:len(dataframe.columns)-2], dataframe_max.iloc[:, dataframe_max.columns.values[-1]]], axis=1,
-                        ignore_index=True)
-idx = dataframe_n[dataframe_n[dataframe_n.columns[-1]] == -float('inf')].index
-dataframe_n.drop(idx, inplace=True)
-data = dataframe_n.values
-
 # number_samples = [5] + list(range(10, 101, 10)) + [120, 150, 200, 250, 300, 400, 500, 700] + list(range(1000, 4001, 1000))
 number_samples = [256, 512, 1028, 2048, 4096, 8192]
 # number_samples = [3000]
@@ -38,6 +25,24 @@ IS_SENSORS, sensors_num = False, 225
 DUMMY_VALUE = -90.0
 fp_penalty_coef = 1
 fn_penalty_coef = 1
+
+num_columns = (sensors_num if IS_SENSORS else max_pus_num * 3 + 1) + max_pus_num * 3 + 2
+cols = [i for i in range(num_columns)]
+dataframe = pd.read_csv("../../../java_workspace/research/spectrum_allocation/resources/data/" +
+                        "dynamic_pus_using_pus50000_15PUs_201910_2616_25.txt",
+                        delimiter=',', header=None, names=cols)
+dataframe_max = pd.read_csv("../../../java_workspace/research/spectrum_allocation/resources/data/" +
+                            "dynamic_pus_max_power50000_15PUs_201910_2616_25.txt",
+                            delimiter=',', header=None)
+dataframe.reset_index(drop=True, inplace=True)
+dataframe_max.reset_index(drop=True, inplace=True)
+dataframe_n = pd.concat([dataframe.iloc[:, 0:len(dataframe.columns)-2], dataframe_max.iloc[:, dataframe_max.columns.values[-1]]], axis=1,
+                        ignore_index=True)
+idx = dataframe_n[dataframe_n[dataframe_n.columns[-1]] == -float('inf')].index
+dataframe_n.drop(idx, inplace=True)
+data = dataframe_n.values
+
+var_f = open("variables_" + datetime.datetime.now().strftime('_%Y%m_%d%H_%M')+ ".txt", "wb")
 average_diff_power = []
 fp_mean, fp_count = [], []
 max_diff_power = []

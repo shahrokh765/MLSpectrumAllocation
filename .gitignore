@@ -13,3 +13,4 @@ __pycache__/
 .idea/
 .ipynb_checkpoints/
 CNN_Class.ipynb
+variables_*
