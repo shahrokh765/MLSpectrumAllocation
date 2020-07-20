@@ -20,11 +20,11 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 # number_samples = [5] + list(range(10, 101, 10)) + [120, 150, 200, 250, 300, 400, 500, 700] + list(range(1000, 4001, 1000))
-number_samples = [256, 512, 1028, 2048, 4096, 8192]
+number_samples = [256, 512, 1028, 2048, 4096]
 number_samples = [8192]
 validation_size = 0.33   # of training samples
 max_pus_num, max_sus_num = 20, 1
-IS_SENSORS, sensors_num = True, 900
+IS_SENSORS, sensors_num = False, 3600
 DUMMY_VALUE = -90.0
 fp_penalty_coef = 1
 fn_penalty_coef = 1
@@ -37,11 +37,11 @@ res_path = (str(sensors_num) + 'Sensors' if IS_SENSORS else str(max_pus_num) + '
 
 num_columns = (sensors_num if IS_SENSORS else max_pus_num * 3 + 1) + max_sus_num * 3 + 2
 cols = [i for i in range(num_columns)]
-dataset_name = "dynamic_pus_900sensor_50000_min10_max20PUs_1SUs_square100grid_splat_2020_06_16_15_12.txt"
+dataset_name = "dynamic_pus_using_pus_60000_20PUs_1SUs_square100grid_splat_2020_07_07_11_24.txt"
 dataframe = pd.read_csv("../../../java_workspace/research/spectrum_allocation/resources/data/" +
                         dataset_name,
                         delimiter=',', header=None, names=cols)
-max_dataset_name = "dynamic_pus_max_power_50000_min10_max20PUs_1SUs_square100grid_splat_2020_06_16_15_12.txt"
+max_dataset_name = "dynamic_pus_max_power_60000_20PUs_1SUs_square100grid_splat_2020_07_07_11_24.txt"
 dataframe_max = pd.read_csv("../../../java_workspace/research/spectrum_allocation/resources/data/" +
                             max_dataset_name,
                             delimiter=',', header=None)
@@ -60,7 +60,7 @@ fp_mean, fp_count = [], []
 best_lambda = []
 max_diff_power = []
 num_inputs = (max_sus_num - 1) * 3 + 2 + (max_pus_num * 3
-                                                       if not IS_SENSORS else sensors_num)
+                                          if not IS_SENSORS else sensors_num)
 dtime = datetime.datetime.now().strftime('_%Y%m_%d%H_%M')
 # samples = 100
 
@@ -100,6 +100,8 @@ def split(data : np.ndarray, train_samples: int, max_pus_number: int, max_sus_nu
                                                 (max_pus_number + num_sus) * 3 - 1] = \
                 data[test_sample, 2 + num_pus * 3:1 + (num_pus + num_sus) * 3]
     else:
+        # X_train[:train_samples, :] = data[:train_samples, :data.shape[1] - 1]
+        # X_test[train_samples:, :] = data[train_samples, :data.shape[1] - 1]
         # read sensors
         X_train[:train_samples, :num_sensors] = data[:train_samples, :num_sensors]
         X_test[:, :num_sensors] = data[train_samples:, :num_sensors]
