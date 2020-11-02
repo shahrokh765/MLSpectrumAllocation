@@ -17,3 +17,4 @@ variables_*
 NNModels/
 log
 *.DS_Store
+rsc/sensors/
