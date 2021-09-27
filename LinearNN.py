@@ -70,7 +70,7 @@ dataframe.reset_index(drop=True, inplace=True)
 data = dataframe.values
 data[data<-90] = -90
 if IS_SENSORS and True:
-    selected_columns = [6, 1, 9, 15, 11, 2, 5, 7]
+    selected_columns = [6, 1, 9, 15, 11, 2, 5, 7]   
     droped_columns = []
     for i in range(sensors_num):
         if i not in selected_columns:
