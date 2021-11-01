@@ -20,64 +20,65 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 # number_samples = [5] + list(range(10, 101, 10)) + [120, 150, 200, 250, 300, 400, 500, 700] + list(range(1000, 4001, 1000))
-number_samples = [256, 512, 1028, 2048, 4096, 8192]
+number_samples = [128, 256, 512, 1028, 2048, 4096]
 # number_samples = [8192]
-number_samples = [50, 100, 200, 300, 400]
-number_samples = [400]
+# number_samples = [50, 100, 200, 300, 400]
+# number_samples = [400]
 validation_size = 0.2   # of training samples, 0.2 for testbed
-max_pus_num, max_sus_num = 4, 1
-IS_SENSORS, sensors_num = True, 17
-DUMMY_VALUE = -90.0
+max_pus_num, max_sus_num = 20, 4
+IS_SENSORS, sensors_num = True, 1600
+DUMMY_VALUE = -110.0
 fp_penalty_coef = 1
 fn_penalty_coef = 1
-noise_floor = -90.0
-batch_size, epochs = 64, 500
+noise_floor = -110.0
+batch_size, epochs = 32, 200
 WORKERS, MAX_QUEUE_SIZE = 1, 6
 lambda_vec = [0, 0.001, 0.01, 0.1, 1]
 hyper_metric, mode = "val_mae", "min"
 res_path = (str(sensors_num) + 'Sensors' if IS_SENSORS else str(max_pus_num) + 'PUs_') + str(max_sus_num) + "SUs"
 
 
-# num_columns = (sensors_num if IS_SENSORS else max_pus_num * 3 + 1) + max_sus_num * 3 + 2
-# cols = [i for i in range(num_columns)]
-# dataset_name = "dynamic_pus_using_pus_50000_min10_max20PUs_min1_max10SUs_square1000grid_log_noisy_std1.0_2020_09_09_02_35.txt"
-# dataframe = pd.read_csv("../../java_workspace/research/spectrum_allocation/resources/data/" +
-#                         dataset_name,
-#                         delimiter=',', header=None, names=cols)
-# max_dataset_name = "dynamic_pus_max_power_50000_min10_max20PUs_min1_max10SUs_square1000grid_log_noisy_std1.0_2020_09_09_02_35.txt"
-# dataframe_max = pd.read_csv("../../java_workspace/research/spectrum_allocation/resources/data/" +
-#                             max_dataset_name,
-#                             delimiter=',', header=None)
-# dataframe.reset_index(drop=True, inplace=True)
-# dataframe_max.reset_index(drop=True, inplace=True)
-# dataframe_n = pd.concat([dataframe.iloc[:, 0:len(dataframe.columns)-2], dataframe_max.iloc[:, dataframe_max.columns.values[-1]]], axis=1,
-#                         ignore_index=True)
-# idx = dataframe_n[dataframe_n[dataframe_n.columns[-1]] == -float('inf')].index
-# dataframe_n.drop(idx, inplace=True)
-# data = dataframe_n.values
+num_columns = (sensors_num if IS_SENSORS else max_pus_num * 3 + 1) + max_sus_num * 3 + 2
+cols = [i for i in range(num_columns)]
+dataset_name = "dynamic_pus_1600sensor_30000_min10_max20PUs_min1_max4SUs_square100grid_splat_2021_10_28_15_33.txt"
+dataframe = pd.read_csv("../../java_workspace/research/spectrum_allocation/resources/data/" +
+                        dataset_name,
+                        delimiter=',', header=None, names=cols)
+max_dataset_name = "dynamic_pus_max_power_30000_min10_max20PUs_min1_max4SUs_square100grid_splat_2021_10_28_15_33.txt"
+dataframe_max = pd.read_csv("../../java_workspace/research/spectrum_allocation/resources/data/" +
+                            max_dataset_name,
+                            delimiter=',', header=None)
+dataframe.reset_index(drop=True, inplace=True)
+dataframe_max.reset_index(drop=True, inplace=True)
+dataframe_max[dataframe_max.shape[1] - 1] = dataframe_max[dataframe_max.shape[1] - 1].astype(float)
+dataframe_n = pd.concat([dataframe.iloc[:, 0:len(dataframe.columns)-2], dataframe_max.iloc[:, dataframe_max.columns.values[-1]]], axis=1,
+                        ignore_index=True)
+idx = dataframe_n[dataframe_n[dataframe_n.columns[-1]] == -float('inf')].index
+dataframe_n.drop(idx, inplace=True)
+data = dataframe_n.values
 # data[data < noise_floor] = noise_floor
 
 
 
 # load from testbed
-dataset_name = "su_ss_calibrate_shuffled"
-max_dataset_name = ""
-num_columns = (sensors_num if IS_SENSORS else max_pus_num * 3 + 1) + max_sus_num * 3 + 1
-cols = [i for i in range(num_columns)]
-dataframe = pd.read_csv('ML/data/testbed/' + dataset_name,
-                        delimiter=',', header=None, names=cols)
-dataframe.reset_index(drop=True, inplace=True)
-data = dataframe.values
-data[data<-90] = -90
-if IS_SENSORS and True:
-    selected_columns = [6, 1, 9, 15, 11, 2, 5, 7]   
-    droped_columns = []
-    for i in range(sensors_num):
-        if i not in selected_columns:
-            droped_columns.append(i)
-    data = np.delete(data, droped_columns, 1)
-    sensors_num = len(selected_columns)
-    num_columns = (sensors_num if IS_SENSORS else max_pus_num * 3 + 1) + max_sus_num * 3 + 2
+# dataset_name = "su_ss_calibrate_shuffled"
+# max_dataset_name = ""
+# num_columns = (sensors_num if IS_SENSORS else max_pus_num * 3 + 1) + max_sus_num * 3 + 1
+# cols = [i for i in range(num_columns)]
+# dataframe = pd.read_csv('ML/data/testbed/' + dataset_name,
+#                         delimiter=',', header=None, names=cols)
+# dataframe.reset_index(drop=True, inplace=True)
+# data = dataframe.values
+# data[data<-90] = -90
+# if IS_SENSORS and True:
+#     selected_columns = [6, 1, 9, 15, 11, 2, 5, 7]
+#     droped_columns = []
+#     for i in range(sensors_num):
+#         if i not in selected_columns:
+#             droped_columns.append(i)
+#     data = np.delete(data, droped_columns, 1)
+#     sensors_num = len(selected_columns)
+#     num_columns = (sensors_num if IS_SENSORS else max_pus_num * 3 + 1) + max_sus_num * 3 + 2
 
 # var_f = open("variables_" + datetime.datetime.now().strftime('_%Y%m_%d%H_%M')+ ".txt", "wb")
 average_diff_power = []
@@ -144,7 +145,8 @@ def split(data : np.ndarray, train_samples: int, max_pus_number: int, max_sus_nu
     y_train = data[0: train_samples, -1]
     # y_val = data[train_samples: train_samples + val_samples, -1]
     y_test = data[train_samples:, -1]
-    return X_train, X_test, y_train, y_test
+    return np.asarray(X_train).astype(np.float32),  np.asarray(X_test).astype(np.float32),\
+           np.asarray(y_train).astype(np.float32), np.asarray(y_test).astype(np.float32)
 
 def fp_mae(y_true, y_pred):
     # custom metric that replace false negative with zero and return the mean of new vector
